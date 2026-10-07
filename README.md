@@ -28,3 +28,5 @@ This initial version supports positive decimal USD expense lines (up to 100), an
 Run `bun install`, `bun run typecheck`, `bun test`, and `bun run build`. Tests use synthetic responses and require no provider credentials.
 
 API reference: https://developer.intuit.com/app/developer/qbo/docs/develop/basic-implementations/basic-billing-implementation
+
+`getBillState(id, signal?)` reads the current balance as a decimal string, bill date, expense lines and linked transaction IDs/types. A zero balance means the bill is settled; it is not proof of a cash payment (credits and adjustments can also settle it). The host application must compare the returned bill with its frozen export, authorize access, and retain observation history. No payment creation API is exposed.

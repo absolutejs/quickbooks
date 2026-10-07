@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/quickbooks",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed QuickBooks Online accounting adapter with bounded transport and explicit uncertain-write outcomes.",
   "type": "module",
   "license": "MIT",

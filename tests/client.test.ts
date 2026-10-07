@@ -120,3 +120,40 @@ test("oversized success response is uncertain and bounded", async () => {
     outcome: "unknown",
   });
 });
+test("bill status is a read, preserves exact balance and payment references, and rejects absent balances", async () => {
+  const state = {
+    Id: "151",
+    SyncToken: "1",
+    TotalAmt: 26.23,
+    Balance: 16.23,
+    TxnDate: "2026-10-07",
+    VendorRef: { value: "56" },
+    Line: [
+      {
+        Amount: 26.23,
+        Description: "Material",
+        DetailType: "AccountBasedExpenseLineDetail",
+        AccountBasedExpenseLineDetail: { AccountRef: { value: "7" } },
+      },
+    ],
+    LinkedTxn: [{ TxnId: "152", TxnType: "BillPaymentCheck" }],
+  };
+  const c = client(async (url, init) => {
+    expect(init.method).toBe("GET");
+    expect(url.pathname).toEndWith("/bill/151");
+    return Response.json({ Bill: state });
+  });
+  expect(await c.getBillState("151")).toMatchObject({
+    balance: "16.23",
+    lines: [{ amount: "26.23", accountId: "7" }],
+    linkedTransactions: [{ id: "152", type: "BillPaymentCheck" }],
+  });
+  for (const balance of [undefined, -1, 1.001]) {
+    const bad = client(async () =>
+      Response.json({ Bill: { ...state, Balance: balance } }),
+    );
+    await expect(bad.getBillState("151")).rejects.toMatchObject({
+      code: "INVALID_BILL_STATE",
+    });
+  }
+});

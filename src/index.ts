@@ -30,6 +30,23 @@ export type BillReceipt = {
   note?: string;
   vendorId: string;
 };
+export type BillState = BillReceipt & {
+  balance: string;
+  date: string;
+  lines: BillInput["lines"];
+  linkedTransactions: { id: string; type: string }[];
+};
+const money = (value: unknown): string => {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value >= 1e12 ||
+    Number(value.toFixed(2)) !== value
+  )
+    throw new Error("INVALID_MONEY");
+  return value.toFixed(2);
+};
 export class QuickBooksError extends Error {
   constructor(
     readonly code: string,
@@ -315,6 +332,53 @@ export function createQuickBooksClient(options: {
           signal,
         ),
       );
+    },
+    getBillState: async (
+      billId: string,
+      signal?: AbortSignal,
+    ): Promise<BillState> => {
+      const data = await request(`bill/${id(billId)}`, {}, undefined, signal);
+      try {
+        const b = record(data.Bill),
+          baseReceipt = receipt(data);
+        if (
+          baseReceipt.id !== billId ||
+          !Array.isArray(b.Line) ||
+          b.Line.length > 100
+        )
+          throw new Error();
+        const lines = b.Line.map((value) => {
+          const line = record(value);
+          if (line.DetailType !== "AccountBasedExpenseLineDetail")
+            throw new Error();
+          const detail = record(line.AccountBasedExpenseLineDetail);
+          return {
+            amount: money(line.Amount),
+            description:
+              typeof line.Description === "string" ? line.Description : "",
+            accountId: id(string(record(detail.AccountRef).value)),
+            ...(detail.CustomerRef
+              ? { customerId: id(string(record(detail.CustomerRef).value)) }
+              : {}),
+          };
+        });
+        const linked = b.LinkedTxn ?? [];
+        if (!Array.isArray(linked) || linked.length > 1000) throw new Error();
+        return {
+          ...baseReceipt,
+          balance: money(b.Balance),
+          date: date(string(b.TxnDate)),
+          lines,
+          linkedTransactions: linked.map((value) => {
+            const link = record(value);
+            const type = string(link.TxnType);
+            if (type.length > 80) throw new Error();
+            return { id: id(string(link.TxnId)), type };
+          }),
+        };
+      } catch {
+        throw new QuickBooksError("INVALID_BILL_STATE", "rejected");
+      }
     },
     getBill: async (billId: string, signal?: AbortSignal) =>
       receipt(await request(`bill/${id(billId)}`, {}, undefined, signal)),
